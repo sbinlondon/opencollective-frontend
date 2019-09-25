@@ -296,7 +296,7 @@ StepDetails.propTypes = {
   /** If true, the select for interval will be disabled */
   disabledInterval: PropTypes.bool,
   tierName: PropTypes.string,
-  collectiveSlug: PropTypes.string,
+  collectiveSlug: PropTypes.string.isRequired,
   /** If true, the input for amount will be disabled */
   disabledAmount: PropTypes.bool,
   /** value for frequency select, defaults to one time. */
