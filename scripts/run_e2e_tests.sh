@@ -14,7 +14,7 @@ if [ "$NODE_ENV" = "circleci" ]; then
   echo "> Starting frontend server"
   if [ -d "/home/circleci/frontend" ]; then
     cd ~/frontend
-    npm start &
+    NCP_IS_DEFAULT=true npm start &
     FRONTEND_PID=$!
     cd -
   else
