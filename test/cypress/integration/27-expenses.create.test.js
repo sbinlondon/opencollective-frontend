@@ -1,29 +1,18 @@
+import 'cypress-file-upload';
 const random = Math.round(Math.random() * 100000);
 const expenseDescription = `New expense ${random}`;
 
-const uploadReceipt = (dropzoneElement = '.InputTypeDropzone') => {
-  const dropEvent = {
-    dataTransfer: {
-      files: [],
-    },
-  };
-
+const uploadReceipt = (dropzoneElement = '.InputTypeDropzone input') => {
   cy.fixture('./images/receipt.jpg').then(picture => {
-    return Cypress.Blob.base64StringToBlob(picture, 'image/jpeg').then(blob => {
-      dropEvent.dataTransfer.files.push(blob);
-    });
+    cy.get(dropzoneElement).upload({ fileContent: picture, fileName: 'receipt.jpg', mimeType: 'image/jpeg' });
   });
-
-  cy.get(dropzoneElement).trigger('drop', dropEvent);
   cy.wait(900);
 };
 
 describe('new expense when logged out', () => {
   it('requires to login to submit an expense', () => {
     cy.visit('/testcollective/expenses');
-    cy.get('.Button.submitExpense.darkBackground')
-      .contains('Submit Expense')
-      .click({ force: true });
+    cy.containsInDataCy('submit-expense-btn', 'Submit Expense').click({ force: true });
     cy.get('.CreateExpenseForm').contains('Sign up or login to submit an expense');
     cy.get('#email').type('testuser+admin@opencollective.com');
     cy.get('[data-cy="signin-btn"]').click();
@@ -124,7 +113,9 @@ describe('comment expense', () => {
     cy.wait(300);
     cy.get('.Comments .itemsList .comment', { timeout: 5000 }).should('have.length', 1);
     cy.get('.Comments .itemsList .comment:first .description').contains('This is a first comment');
-    cy.get('.desktopOnly .submitExpense').click();
+    cy.getByDataCy('submit-expense-btn')
+      .first()
+      .click();
     cy.get('.descriptionField input').should('have.value', '');
     cy.get('.amountField input').should('have.value', '');
   });

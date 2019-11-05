@@ -2,44 +2,26 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { FormattedMessage } from 'react-intl';
 
-import { imagePreview } from '../lib/utils';
-import { defaultImage } from '../lib/constants/collectives';
-
 import Container from './Container';
 import { P, Span } from './Text';
-import { Link } from '../server/pages';
-import StyledLink from './StyledLink';
+import LinkCollective from './LinkCollective';
 import FormattedMoneyAmount from './FormattedMoneyAmount';
+import Avatar from './Avatar';
 
 const PledgeCard = ({ currency, fromCollective, interval, publicMessage, totalAmount }) => (
   <Container bg="white" borderRadius="8px" border="1px solid" borderColor="black.transparent.20" minHeight="100%">
     <Container display="flex" justifyContent="space-between" alignItems="center" pt={4}>
       <Container bg="black.200" height="1px" width={0.25} />
 
-      <Link route="collective" params={{ slug: fromCollective.slug }} passHref>
-        <a>
-          <Container
-            backgroundImage={`url(${imagePreview(fromCollective.image, defaultImage[fromCollective.type], {
-              width: 65,
-            })})`}
-            backgroundSize="contain"
-            backgroundRepeat="no-repeat"
-            backgroundPosition="center center"
-            borderRadius={12}
-            border="2px solid white"
-            height={[52, null, 65]}
-            width={[52, null, 65]}
-          />
-        </a>
-      </Link>
+      <LinkCollective collective={fromCollective}>
+        <Avatar collective={fromCollective} radius={[52, null, 65]} />
+      </LinkCollective>
 
       <Container bg="black.200" height="1px" width={0.25} />
     </Container>
 
     <P textAlign="center" fontWeight="bold" mt={3} px={2}>
-      <Link route="collective" params={{ slug: fromCollective.slug }} passHref>
-        <StyledLink color="black.800">{fromCollective.name}</StyledLink>
-      </Link>
+      <LinkCollective collective={fromCollective}>{fromCollective.name}</LinkCollective>
     </P>
 
     <P fontSize="Tiny" textAlign="center" mt={2} px={2} pb={2}>
@@ -64,10 +46,11 @@ const PledgeCard = ({ currency, fromCollective, interval, publicMessage, totalAm
 PledgeCard.propTypes = {
   currency: PropTypes.string.isRequired,
   fromCollective: PropTypes.shape({
-    image: PropTypes.string,
     name: PropTypes.string.isRequired,
     slug: PropTypes.string.isRequired,
     type: PropTypes.string.isRequired,
+    imageUrl: PropTypes.string,
+    isIncognito: PropTypes.boolean,
   }).isRequired,
   interval: PropTypes.string,
   publicMessage: PropTypes.string,

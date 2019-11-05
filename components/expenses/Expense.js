@@ -4,7 +4,7 @@ import gql from 'graphql-tag';
 import { defineMessages, FormattedMessage, injectIntl } from 'react-intl';
 import { graphql } from 'react-apollo';
 
-import { capitalize, formatCurrency } from '../../lib/utils';
+import { capitalize, formatCurrency, compose } from '../../lib/utils';
 import colors from '../../lib/constants/colors';
 
 import Avatar from '../Avatar';
@@ -17,7 +17,10 @@ import ExpenseNeedsTaxFormBadge from './ExpenseNeedsTaxFormBadge';
 import ApproveExpenseBtn from './ApproveExpenseBtn';
 import RejectExpenseBtn from './RejectExpenseBtn';
 import PayExpenseBtn from './PayExpenseBtn';
+import MarkExpenseAsUnpaidBtn from './MarkExpenseAsUnpaidBtn';
 import EditPayExpenseFeesForm from './EditPayExpenseFeesForm';
+import ConfirmationModal from '../ConfirmationModal';
+import StyledButton from '../StyledButton';
 
 class Expense extends React.Component {
   static propTypes = {
@@ -57,6 +60,7 @@ class Expense extends React.Component {
     lockPayAction: PropTypes.func,
     unlockPayAction: PropTypes.func,
     editExpense: PropTypes.func,
+    unapproveExpense: PropTypes.func,
     intl: PropTypes.object.isRequired,
   };
 
@@ -67,6 +71,7 @@ class Expense extends React.Component {
       modified: false,
       expense: {},
       mode: undefined,
+      showUnapproveModal: false,
     };
 
     this.save = this.save.bind(this);
@@ -88,6 +93,16 @@ class Expense extends React.Component {
         id: 'expense.viewDetails',
         defaultMessage: 'View Details',
       },
+      'unapprove.modal.header': {
+        id: 'unapprove.modal.header',
+        defaultMessage: 'Unapprove Expense',
+      },
+      'unapprove.modal.body': {
+        id: 'unapprove.modal.body',
+        defaultMessage: 'Are you sure you want to unapprove this expense?',
+      },
+      no: { id: 'no', defaultMessage: 'No' },
+      yes: { id: 'yes', defaultMessage: 'Yes' },
     });
     this.currencyStyle = {
       style: 'currency',
@@ -119,6 +134,16 @@ class Expense extends React.Component {
     const newState = { ...this.state, modified: true, ...obj };
     this.setState(newState);
   }
+
+  handleUnapproveExpense = async id => {
+    try {
+      await this.props.unapproveExpense(id);
+      this.setState({ showUnapproveModal: false });
+    } catch (err) {
+      console.error(err);
+      this.setState({ showUnapproveModal: false });
+    }
+  };
 
   async save() {
     const expense = {
@@ -155,6 +180,11 @@ class Expense extends React.Component {
     mode = mode || view;
 
     const canPay = LoggedInUser && LoggedInUser.canPayExpense(expense) && expense.status === 'APPROVED';
+    const canMarkExpenseAsUnpaid =
+      LoggedInUser &&
+      LoggedInUser.canPayExpense(expense) &&
+      expense.status === 'PAID' &&
+      expense.payoutMethod === 'other';
 
     const canReject =
       LoggedInUser &&
@@ -163,6 +193,14 @@ class Expense extends React.Component {
         (expense.status === 'APPROVED' &&
           (Date.now() - new Date(expense.updatedAt).getTime() < 60 * 1000 * 15 || // admin of collective can reject the expense for up to 10mn after approving it
             LoggedInUser.canEditCollective(collective.host))));
+
+    let precision = 0;
+
+    // Check if the remainder is not 0, this check is important in order to know the amount that needs precision
+    // i.e display $10.21 as $10.21 instead of $10
+    if ((expense.amount / 100) % 1 !== 0) {
+      precision = 2;
+    }
 
     const canApprove =
       LoggedInUser &&
@@ -311,7 +349,7 @@ class Expense extends React.Component {
         <div className="body">
           <div className="header">
             <div className="amount pullRight">
-              <AmountCurrency amount={-expense.amount} currency={expense.currency} />
+              <AmountCurrency amount={-expense.amount} currency={expense.currency} precision={precision} />
             </div>
             <div className="description">
               <Link route={`/${collective.slug}/expenses/${expense.id}`} title={capitalize(title)}>
@@ -372,7 +410,18 @@ class Expense extends React.Component {
             onChange={expense => this.handleChange({ expense })}
             mode={mode}
           />
-
+          {this.state.showUnapproveModal && (
+            <ConfirmationModal
+              show={this.state.showUnapproveModal}
+              header={intl.formatMessage(this.messages['unapprove.modal.header'])}
+              body={intl.formatMessage(this.messages['unapprove.modal.body'])}
+              onClose={() => this.setState({ showUnapproveModal: false })}
+              cancelLabel={intl.formatMessage(this.messages['no'])}
+              cancelHandler={() => this.setState({ showUnapproveModal: false })}
+              continueLabel={intl.formatMessage(this.messages['yes'])}
+              continueHandler={() => this.handleUnapproveExpense(expense.id)}
+            />
+          )}
           {editable && (
             <div className="actions">
               {mode === 'edit' && this.state.modified && (
@@ -385,7 +434,7 @@ class Expense extends React.Component {
                   </div>
                 </div>
               )}
-              {mode !== 'edit' && (canPay || canApprove || canReject) && (
+              {mode !== 'edit' && (canPay || canApprove || canReject || canMarkExpenseAsUnpaid) && (
                 <div className="manageExpense">
                   {canPay && expense.payoutMethod === 'other' && (
                     <EditPayExpenseFeesForm
@@ -406,8 +455,14 @@ class Expense extends React.Component {
                         unlock={this.props.unlockPayAction}
                       />
                     )}
+                    {canPay && (
+                      <StyledButton mr={2} onClick={() => this.setState({ showUnapproveModal: true })}>
+                        <FormattedMessage id="expense.unapprove.btn" defaultMessage="Unapprove" />
+                      </StyledButton>
+                    )}
                     {canApprove && <ApproveExpenseBtn id={expense.id} />}
                     {canReject && <RejectExpenseBtn id={expense.id} />}
+                    {canMarkExpenseAsUnpaid && <MarkExpenseAsUnpaidBtn id={expense.id} />}
                   </div>
                 </div>
               )}
@@ -419,27 +474,51 @@ class Expense extends React.Component {
   }
 }
 
-const editExpenseQuery = gql`
-  mutation editExpense($expense: ExpenseInputType!) {
-    editExpense(expense: $expense) {
-      id
-      description
-      amount
-      attachment
-      category
-      privateMessage
-      payoutMethod
-      status
+const unapproveExpense = graphql(
+  gql`
+    mutation unapproveExpense($id: Int!) {
+      unapproveExpense(id: $id) {
+        id
+        status
+      }
     }
-  }
-`;
+  `,
+  {
+    props: ({ mutate }) => ({
+      unapproveExpense: async id => {
+        return await mutate({ variables: { id } });
+      },
+    }),
+  },
+);
 
-const addMutation = graphql(editExpenseQuery, {
-  props: ({ mutate }) => ({
-    editExpense: async expense => {
-      return await mutate({ variables: { expense } });
-    },
-  }),
-});
+const editExpense = graphql(
+  gql`
+    mutation editExpense($expense: ExpenseInputType!) {
+      editExpense(expense: $expense) {
+        id
+        description
+        amount
+        attachment
+        category
+        privateMessage
+        payoutMethod
+        status
+      }
+    }
+  `,
+  {
+    props: ({ mutate }) => ({
+      editExpense: async expense => {
+        return await mutate({ variables: { expense } });
+      },
+    }),
+  },
+);
 
-export default injectIntl(addMutation(Expense));
+const addMutations = compose(
+  unapproveExpense,
+  editExpense,
+);
+
+export default injectIntl(addMutations(Expense));

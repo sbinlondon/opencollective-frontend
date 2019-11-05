@@ -1,3 +1,4 @@
+import 'cypress-file-upload';
 import { defaultTestUserEmail } from './data';
 import { randomEmail, randomSlug } from './faker';
 import { getLoggedInUserQuery } from '../../../lib/graphql/queries';
@@ -80,8 +81,9 @@ Cypress.Commands.add('getInbox', () => {
 /**
  * Navigate to an email in maildev.
  *
- * API must be configured to use maildev (MAILDEV=true) and the service must be
- * started (`npm run maildev` on the API).
+ * API must be configured to use maildev
+ * - configured by default in development, e2e and circleci environments
+ * - otherwise MAILDEV_CLIENT=true and MAILDEV_SERVER=true
  *
  * @param emailMatcher {func} - used to find the email. Gets passed an email. To see the
  *  list of all fields, check https://github.com/djfarrelly/MailDev/blob/master/docs/rest.md
@@ -167,7 +169,7 @@ Cypress.Commands.add('createHostedCollective', collectiveParams => {
  */
 Cypress.Commands.add('addCreditCardToCollective', ({ collectiveSlug }) => {
   cy.login({ redirect: `/${collectiveSlug}/edit/payment-methods` });
-  cy.contains('button', 'Add a payment method').click();
+  cy.contains('button', 'Add a credit card').click();
   cy.wait(2000);
   fillStripeInput();
   cy.wait(1000);
@@ -231,6 +233,30 @@ Cypress.Commands.add('assertLoggedIn', (username, timeout) => {
  */
 Cypress.Commands.add('fillInputField', (fieldname, value) => {
   return cy.get(`.inputField.${fieldname} input`).type(value);
+});
+
+/**
+ * Wrapper around `get` specialized to retrieve data from `data-cy`. You can pass an array
+ * for deeper queries.
+ */
+Cypress.Commands.add('getByDataCy', (query, params) => {
+  if (Array.isArray(query)) {
+    return cy.get(query.map(elem => `[data-cy="${elem}"]`), params);
+  } else {
+    return cy.get(`[data-cy="${query}"]`, params);
+  }
+});
+
+/**
+ * Wrapper around `contains` specialized to retrieve data from `data-cy`. You can pass an array
+ * for deeper queries.
+ */
+Cypress.Commands.add('containsInDataCy', (query, content, params) => {
+  if (Array.isArray(query)) {
+    return cy.contains(query.map(elem => `[data-cy="${elem}"]`), content, params);
+  } else {
+    return cy.contains(`[data-cy="${query}"]`, content, params);
+  }
 });
 
 // ---- Private ----

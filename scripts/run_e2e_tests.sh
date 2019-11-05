@@ -4,11 +4,11 @@ if [ "$NODE_ENV" = "circleci" ]; then
   cd ~/api
 
   echo "> Starting maildev server"
-  npm run maildev &
+  npx maildev &
   MAILDEV_PID=$!
 
   echo "> Starting api server"
-  PG_DATABASE=opencollective_dvl MAILDEV=true npm start &
+  PG_DATABASE=opencollective_dvl MAILDEV_CLIENT=true npm start &
   API_PID=$!
   cd -
   echo "> Starting frontend server"

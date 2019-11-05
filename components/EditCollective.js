@@ -7,7 +7,7 @@ import Body from './Body';
 import Footer from './Footer';
 import SignInOrJoinFree from './SignInOrJoinFree';
 import EditCollectiveForm from './EditCollectiveForm';
-import CollectiveCover from './CollectiveCover';
+import CollectiveNavbar from './CollectiveNavbar';
 import NotificationBar from './NotificationBar';
 import { defaultBackgroundImage } from '../lib/constants/collectives';
 import Loading from './Loading';
@@ -54,12 +54,7 @@ class EditCollective extends React.Component {
     window.OC.editCollective = this.editCollective.bind(this);
   }
 
-  async validate(CollectiveInputType) {
-    const tiers = this.cleanTiers(CollectiveInputType.tiers);
-    if (tiers) {
-      CollectiveInputType.tiers = tiers;
-    }
-
+  validate(CollectiveInputType) {
     if (typeof CollectiveInputType.tags === 'string') {
       CollectiveInputType.tags = CollectiveInputType.tags.split(',').map(t => t.trim());
     }
@@ -70,13 +65,11 @@ class EditCollective extends React.Component {
     const { collective } = this.props;
     CollectiveInputType.settings = {
       ...collective.settings,
-      goals: CollectiveInputType.goals,
       editor: CollectiveInputType.markdown ? 'markdown' : 'html',
       sendInvoiceByEmail: CollectiveInputType.sendInvoiceByEmail,
       apply: CollectiveInputType.application,
       tos: CollectiveInputType.tos,
     };
-    delete CollectiveInputType.goals;
     delete CollectiveInputType.markdown;
     delete CollectiveInputType.sendInvoiceByEmail;
     delete CollectiveInputType.tos;
@@ -85,36 +78,8 @@ class EditCollective extends React.Component {
     return CollectiveInputType;
   }
 
-  cleanTiers(tiers) {
-    if (!tiers) return null;
-    return tiers.map(tier => {
-      let resetAttributes = [];
-      switch (tier.type) {
-        case 'TICKET':
-        case 'PRODUCT':
-          resetAttributes = ['interval', 'presets'];
-          break;
-        case 'MEMBERSHIP':
-        case 'SERVICE':
-          resetAttributes = ['presets', 'maxQuantity'];
-          break;
-        case 'DONATION':
-          resetAttributes = ['maxQuantity'];
-          break;
-      }
-      const cleanTier = { ...tier };
-      resetAttributes.map(attr => {
-        cleanTier[attr] = null;
-      });
-      if (tier.amountType === 'FIXED') {
-        cleanTier.presets = null;
-      }
-      return cleanTier;
-    });
-  }
-
   async editCollective(CollectiveInputType) {
-    CollectiveInputType = await this.validate(CollectiveInputType);
+    CollectiveInputType = this.validate(CollectiveInputType);
     if (!CollectiveInputType) {
       return false;
     }
@@ -138,7 +103,6 @@ class EditCollective extends React.Component {
 
     if (!collective || !collective.slug) return <div />;
 
-    const title = `Edit ${collective.name} ${collective.type.toLowerCase()}`;
     const canEditCollective = LoggedInUser && LoggedInUser.canEditCollective(collective);
     const notification = {};
     if (collective.isArchived && collective.type === 'USER') {
@@ -185,7 +149,7 @@ class EditCollective extends React.Component {
               description={notification.description}
             />
           )}
-          <CollectiveCover href={`/${collective.slug}`} collective={collective} title={title} className="small" />
+          <CollectiveNavbar collective={collective} isAdmin={canEditCollective} />
           <div className="content">
             {!canEditCollective && (
               <div className="login">

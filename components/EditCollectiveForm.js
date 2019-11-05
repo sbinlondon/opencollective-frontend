@@ -32,6 +32,7 @@ import EditCollectiveEmptyBalance from './EditCollectiveEmptyBalance';
 import EditCollectiveArchive from './EditCollectiveArchive';
 import EditCollectiveDelete from './EditCollectiveDelete';
 import EditUserEmailForm from './EditUserEmailForm';
+import Container from './Container';
 
 const selectedStyle = css`
   background-color: #eee;
@@ -74,34 +75,30 @@ class EditCollectiveForm extends React.Component {
     collective.tos = get(collective, 'settings.tos');
     collective.sendInvoiceByEmail = get(collective, 'settings.sendInvoiceByEmail');
     collective.application = get(collective, 'settings.apply');
-    collective.goals = get(collective, 'settings.goals');
     collective.markdown = get(collective, 'settings.markdown');
 
     this.state = {
       modified: false,
       section: 'info',
       collective,
-      members: collective.members || [{}],
       tiers: collective.tiers || [{}],
-      goals: collective.settings.goals || [{}],
     };
 
     const isNewCollectivePage = parseToBoolean(process.env.NCP_IS_DEFAULT);
     this.showEditTiers = ['COLLECTIVE', 'EVENT'].includes(collective.type);
     this.showExpenses = collective.type === 'COLLECTIVE' || collective.isHost;
-    this.showEditImages = !isNewCollectivePage;
-    this.showEditGoals = collective.type === 'COLLECTIVE' && !isNewCollectivePage;
+    this.showEditImages = !isNewCollectivePage || collective.type === CollectiveType.EVENT;
+    this.showEditGoals = collective.type === CollectiveType.COLLECTIVE;
     this.showHost = collective.type === 'COLLECTIVE';
     this.defaultTierType = collective.type === 'EVENT' ? 'TICKET' : 'TIER';
     this.showEditMembers = ['COLLECTIVE', 'ORGANIZATION'].includes(collective.type);
     this.showPaymentMethods = ['USER', 'ORGANIZATION'].includes(collective.type);
-    this.members = collective.members && collective.members.filter(m => ['ADMIN', 'MEMBER'].includes(m.role));
     this.showVirtualCards = collective.type === 'ORGANIZATION';
 
     this.messages = defineMessages({
       loading: { id: 'loading', defaultMessage: 'loading' },
-      save: { id: 'save', defaultMessage: 'save' },
-      saved: { id: 'saved', defaultMessage: 'saved' },
+      save: { id: 'save', defaultMessage: 'Save' },
+      saved: { id: 'saved', defaultMessage: 'Saved' },
       'event.create.btn': {
         id: 'event.create.btn',
         defaultMessage: 'Create Event',
@@ -140,10 +137,6 @@ class EditCollectiveForm extends React.Component {
       'description.label': {
         id: 'collective.description.label',
         defaultMessage: 'Short description',
-      },
-      'longDescription.label': {
-        id: 'collective.longDescription.label',
-        defaultMessage: 'Long description',
       },
       'expensePolicy.label': {
         id: 'collective.expensePolicy.label',
@@ -318,7 +311,6 @@ class EditCollectiveForm extends React.Component {
     } else {
       collective[fieldname] = value;
     }
-
     this.setState({
       modified: true,
       collective: Object.assign({}, this.state.collective, collective),
@@ -331,12 +323,7 @@ class EditCollectiveForm extends React.Component {
   }
 
   async handleSubmit() {
-    const collective = {
-      ...this.state.collective,
-      tiers: this.state.tiers,
-      goals: this.state.goals,
-      members: this.state.members,
-    };
+    const collective = { ...this.state.collective, tiers: this.state.tiers };
     this.props.onSubmit(collective);
     this.setState({ modified: false });
   }
@@ -358,7 +345,7 @@ class EditCollectiveForm extends React.Component {
     if (['loading', 'saved'].includes(status)) {
       submitBtnMessageId = status;
     }
-    console.log('>>> submitBtnMessageId', submitBtnMessageId);
+
     const submitBtnLabel = this.messages[submitBtnMessageId] && intl.formatMessage(this.messages[submitBtnMessageId]);
     const defaultStartsAt = new Date();
     const type = collective.type.toLowerCase();
@@ -483,12 +470,6 @@ class EditCollectiveForm extends React.Component {
           },
         },
         {
-          name: 'longDescription',
-          type: 'textarea',
-          placeholder: '',
-          description: 'Protip: you can use markdown',
-        },
-        {
           name: 'tags',
           maxLength: 128,
           type: 'tags',
@@ -594,14 +575,6 @@ class EditCollectiveForm extends React.Component {
               font-size: 1.5rem;
             }
 
-            .FormInputs {
-              overflow-x: hidden;
-            }
-
-            .EditCollectiveForm :global(textarea[name='longDescription']) {
-              height: 30rem;
-            }
-
             .EditCollectiveForm :global(textarea[name='expensePolicy']) {
               height: 30rem;
             }
@@ -682,7 +655,7 @@ class EditCollectiveForm extends React.Component {
                 params={{ slug: collective.slug, section: 'goals' }}
                 className="MenuItem goals"
               >
-                <FormattedMessage id="editCollective.menu.goals" defaultMessage="Goals" />
+                <FormattedMessage id="editCollective.menu.goals" defaultMessage="Collective Goals" />
               </MenuItem>
             )}
             {this.showHost && (
@@ -813,14 +786,7 @@ class EditCollectiveForm extends React.Component {
                     </div>
                   ),
               )}
-              {this.state.section === 'members' && (
-                <EditMembers
-                  title="Edit Core Contributors"
-                  members={this.members}
-                  collective={collective}
-                  onChange={this.handleObjectChange}
-                />
-              )}
+              {this.state.section === 'members' && <EditMembers collective={collective} LoggedInUser={LoggedInUser} />}
               {this.state.section === 'webhooks' && (
                 <EditWebhooks title="Edit webhooks" collectiveSlug={collective.slug} />
               )}
@@ -835,15 +801,7 @@ class EditCollectiveForm extends React.Component {
                   defaultType={this.defaultTierType}
                 />
               )}
-              {this.state.section === 'goals' && (
-                <EditGoals
-                  title="goals"
-                  goals={this.state.goals}
-                  collective={collective}
-                  currency={collective.currency}
-                  onChange={this.handleObjectChange}
-                />
-              )}
+              {this.state.section === 'goals' && <EditGoals collective={collective} currency={collective.currency} />}
               {this.state.section === 'host' && (
                 <EditHost
                   collective={collective}
@@ -857,14 +815,24 @@ class EditCollectiveForm extends React.Component {
               )}
               {['gift-cards-create', 'gift-cards-send'].includes(this.state.section) && (
                 <Flex flexDirection="column">
-                  <Box mb="3em">
+                  <Container
+                    mb={4}
+                    pb={4}
+                    borderBottom="1px solid #E8E9EB"
+                    display="flex"
+                    justifyContent="space-between"
+                    flexWrap="wrap"
+                  >
                     <Link route="editCollective" params={{ slug: collective.slug, section: 'gift-cards' }}>
                       <StyledButton>
                         <ArrowBack size="1em" />{' '}
                         <FormattedMessage id="virtualCards.returnToEdit" defaultMessage="Go back to gift cards list" />
                       </StyledButton>
                     </Link>
-                  </Box>
+                    <a href="https://docs.opencollective.com/help/backers-and-sponsors/gift-cards#faq">
+                      <FormattedMessage id="Giftcard.learnMore" defaultMessage="Learn more about Gift Cards" />.
+                    </a>
+                  </Container>
                   <CreateVirtualCardsForm
                     collectiveId={collective.id}
                     collectiveSlug={collective.slug}
@@ -889,6 +857,8 @@ class EditCollectiveForm extends React.Component {
               'gift-cards-send',
               'payment-methods',
               'webhooks',
+              'members',
+              'goals',
             ].indexOf(this.state.section) === -1 && (
               <div className="actions">
                 <Button

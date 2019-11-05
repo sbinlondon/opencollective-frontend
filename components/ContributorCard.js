@@ -56,6 +56,8 @@ const getMainContributorRole = contributor => {
     return roles.ADMIN;
   } else if (contributor.isCore) {
     return roles.MEMBER;
+  } else if (contributor.isBacker && contributor.totalAmountDonated < 1) {
+    return roles.CONTRIBUTOR;
   } else if (contributor.isBacker) {
     return roles.BACKER;
   } else if (contributor.isFundraiser) {
@@ -81,7 +83,7 @@ const ContributorCard = ({ intl, width, height, contributor, currency, ...props 
       </CollectiveLogoContainer>
       <Flex flexDirection="column" alignItems="center" p={2} pt={1}>
         <LinkContributor contributor={contributor}>
-          <H5 fontSize="Paragraph" fontWeight="bold" lineHeight="Caption" title={contributor.name}>
+          <H5 fontSize="Paragraph" fontWeight="bold" textAlign="center" lineHeight="Caption" title={contributor.name}>
             {truncate(contributor.name, { length: 16 })}
           </H5>
         </LinkContributor>
@@ -116,7 +118,7 @@ ContributorCard.propTypes = {
     isIncognito: PropTypes.bool,
     type: PropTypes.oneOf(['USER', 'COLLECTIVE', 'ORGANIZATION', 'CHAPTER', 'ANONYMOUS']),
     totalAmountDonated: PropTypes.number,
-    image: PropTypes.string.isRequired,
+    image: PropTypes.string,
     publicMessage: PropTypes.string,
     roles: PropTypes.arrayOf(PropTypes.string.isRequired),
     isAdmin: PropTypes.bool.isRequired,

@@ -22,7 +22,7 @@ import StyledButton from './StyledButton';
 import StyledSelect from './StyledSelect';
 import { Add } from 'styled-icons/material/Add';
 import StyledInputGroup from './StyledInputGroup';
-import ExternalLinkNewTab from './ExternalLinkNewTab';
+import ExternalLink from './ExternalLink';
 
 const messages = defineMessages({
   'webhooks.url.label': {
@@ -46,6 +46,8 @@ const messages = defineMessages({
     defaultMessage: 'Save {count} webhooks',
   },
 });
+
+const EMPTY_WEBHOOKS = [];
 
 class EditWebhooks extends React.Component {
   static propTypes = {
@@ -76,7 +78,7 @@ class EditWebhooks extends React.Component {
   }
 
   getWebhooksFromProps = props => {
-    return get(props, 'data.Collective.notifications', []);
+    return get(props, 'data.Collective.notifications', EMPTY_WEBHOOKS);
   };
 
   validateWebhookUrl = value => {
@@ -256,9 +258,12 @@ class EditWebhooks extends React.Component {
                 defaultMessage="NEW! You can now use the Beta {zapierLink} app to manage your integrations."
                 values={{
                   zapierLink: (
-                    <ExternalLinkNewTab href="https://zapier.com/developer/public-invite/21484/63399c65bb01d75e00fe091ae7f58683/">
+                    <ExternalLink
+                      href="https://zapier.com/developer/public-invite/21484/63399c65bb01d75e00fe091ae7f58683/"
+                      openInNewTab
+                    >
                       Zapier
-                    </ExternalLinkNewTab>
+                    </ExternalLink>
                   ),
                 }}
               />
@@ -310,7 +315,7 @@ class EditWebhooks extends React.Component {
           >
             {status === 'saved' ? (
               <Span textTransform="capitalize">
-                <FormattedMessage id="saved" defaultMessage="saved" />
+                <FormattedMessage id="saved" defaultMessage="Saved" />
               </Span>
             ) : (
               <FormattedMessage

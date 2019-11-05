@@ -39,14 +39,9 @@ class CommentsWithData extends React.Component {
       FromCollectiveId: LoggedInUser.collective.id,
       ExpenseId: expense.id,
     };
-    console.log('>>> createComment', CommentInputType);
-    let res;
-    try {
-      res = await this.props.createComment(CommentInputType);
-    } catch (e) {
-      console.error('>>> error while trying to create the comment', CommentInputType, e);
-    }
-    return res;
+
+    const res = await this.props.createComment(CommentInputType);
+    return res.data.createComment;
   }
 
   renderUserAction(LoggedInUser, expense, notice) {
@@ -57,16 +52,6 @@ class CommentsWithData extends React.Component {
           <LoginBtn>
             <FormattedMessage id="comment.login" defaultMessage="Login to comment" />
           </LoginBtn>
-        </div>
-      );
-    else if (!LoggedInUser.canCreateCommentOnExpense(expense))
-      return (
-        <div>
-          <hr />
-          <FormattedMessage
-            id="comment.badPermissions"
-            defaultMessage="You don't have permission to comment on this expense."
-          />
         </div>
       );
     return <CommentForm onSubmit={this.createComment} LoggedInUser={LoggedInUser} notice={notice} />;

@@ -72,7 +72,7 @@ class SectionUpdates extends React.PureComponent {
 
     /** Transactions */
     data: PropTypes.shape({
-      refetch: PropTypes.func.isRequired,
+      refetch: PropTypes.func,
       Collective: PropTypes.shape({
         updates: PropTypes.arrayOf(
           PropTypes.shape({
@@ -98,8 +98,9 @@ class SectionUpdates extends React.PureComponent {
 
   componentDidUpdate(oldProps) {
     // If user log in/out we need to refresh data as it depends on the current user
-    if (oldProps.isLoggedIn !== this.props.isLoggedIn) {
-      this.props.data.refetch();
+    const refetch = get(this.props.data, 'refetch');
+    if (oldProps.isLoggedIn !== this.props.isLoggedIn && refetch) {
+      refetch();
     }
   }
 
@@ -130,7 +131,7 @@ class SectionUpdates extends React.PureComponent {
           </P>
           {isAdmin && (
             <Link route="createUpdate" params={{ collectiveSlug: collective.slug }}>
-              <StyledButton buttonStyle="primary">
+              <StyledButton data-cy="create-new-update-btn" buttonStyle="primary">
                 <Span fontSize="LeadParagraph" fontWeight="bold" mr={2}>
                   +
                 </Span>
@@ -149,7 +150,7 @@ class SectionUpdates extends React.PureComponent {
             </MessageBox>
           </div>
         ) : (
-          <StyledCard>
+          <StyledCard data-cy="updatesList">
             {updates.map((update, idx) => (
               <Container
                 key={update.id}
@@ -229,7 +230,7 @@ class SectionUpdates extends React.PureComponent {
         )}
         {updates.length > 0 && (
           <Link route="updates" params={{ collectiveSlug: collective.slug }}>
-            <StyledButton buttonSize="large" mt={4} width={1} p="10px">
+            <StyledButton data-cy="view-all-updates-btn" buttonSize="large" mt={4} width={1} p="10px">
               <FormattedMessage id="CollectivePage.SectionUpdates.ViewAll" defaultMessage="View all updates" /> →
             </StyledButton>
           </Link>

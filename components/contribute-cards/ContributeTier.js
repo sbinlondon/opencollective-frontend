@@ -23,8 +23,10 @@ const messages = defineMessages({
   },
 });
 
-const getContributionTypeFromTier = tier => {
-  if (tier.goal) {
+const getContributionTypeFromTier = (tier, isPassed) => {
+  if (isPassed) {
+    return ContributionTypes.TIER_PASSED;
+  } else if (tier.goal) {
     return ContributionTypes.FINANCIAL_GOAL;
   } else if (tier.type === TierTypes.PRODUCT) {
     return ContributionTypes.PRODUCT;
@@ -41,8 +43,10 @@ const getContributionTypeFromTier = tier => {
 
 const ContributeTier = ({ intl, collective, tier, ...props }) => {
   const currency = tier.currency || collective.currency;
-  const minAmount = tier.amountType === 'FLEXIBLE' ? tier.minimumAmount : tier.amount;
+  const isFlexibleAmount = tier.amountType === 'FLEXIBLE';
+  const minAmount = isFlexibleAmount ? tier.minimumAmount : tier.amount;
   const raised = tier.interval ? tier.stats.totalRecurringDonations : tier.stats.totalDonated;
+  const isPassed = tier.endsAt && new Date() > new Date(tier.endsAt);
 
   let description;
   let isTruncated = false;
@@ -65,10 +69,12 @@ const ContributeTier = ({ intl, collective, tier, ...props }) => {
       route="orderCollectiveTierNew"
       routeParams={{ collectiveSlug: collective.slug, verb: 'contribute', tierSlug: tier.slug, tierId: tier.id }}
       title={tier.name}
-      type={getContributionTypeFromTier(tier)}
+      type={getContributionTypeFromTier(tier, isPassed)}
       buttonText={tier.button}
       contributors={tier.contributors}
       stats={tier.stats.contributors}
+      data-cy="contribute-card-tier"
+      disableCTA={isPassed}
       {...props}
     >
       <Flex flexDirection="column" justifyContent="space-between" height="100%">
@@ -132,11 +138,13 @@ const ContributeTier = ({ intl, collective, tier, ...props }) => {
             )}
           </P>
         </div>
-        {minAmount && (
+        {!isPassed && minAmount > 0 && (
           <div>
-            <P fontSize="Tiny" color="black.600" textTransform="uppercase" mb={1}>
-              <FormattedMessage id="ContributeTier.StartsAt" defaultMessage="Starts at" />
-            </P>
+            {isFlexibleAmount && (
+              <P fontSize="Tiny" color="black.600" textTransform="uppercase" mb={1}>
+                <FormattedMessage id="ContributeTier.StartsAt" defaultMessage="Starts at" />
+              </P>
+            )}
             <P color="black.700">
               <FormattedMoneyAmount
                 amount={minAmount}
@@ -166,6 +174,7 @@ ContributeTier.propTypes = {
     hasLongDescription: PropTypes.bool,
     interval: PropTypes.string,
     amountType: PropTypes.string,
+    endsAt: PropTypes.string,
     button: PropTypes.string,
     goal: PropTypes.number,
     minimumAmount: PropTypes.number,

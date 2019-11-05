@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { FormattedMessage, defineMessages, injectIntl } from 'react-intl';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
 import { Flex, Box } from '@rebass/grid';
 
 import { ContributionTypes } from '../../lib/constants/contribution-types';
@@ -31,22 +31,26 @@ const StyledContributeCard = styled.div`
 
 /** Tier card banner */
 const CoverImage = styled.div`
-  background: ${props => {
-    const primary = props.theme.colors.primary;
-    const radial = `radial-gradient(circle, ${primary[300]} 0%, ${primary[800]} 150%), `;
-    const image = props.image ? `url(${props.image}), ` : '';
-    return `${image}${radial}${primary[500]}`;
-  }};
   height: 104px;
   background-repeat: no-repeat;
   background-size: cover;
   padding: 16px;
   position: relative;
   border-radius: 16px 16px 0 0;
+
+  ${props => {
+    const primary = props.theme.colors.primary;
+    const radial = `radial-gradient(circle, ${primary[300]} 0%, ${primary[800]} 150%), `;
+    const image = props.image ? `url(${props.image}), ` : '';
+    return css`
+      background: ${image} ${radial} ${primary[500]};
+      ${props.isDisabled && `filter: grayscale(0.75);`}
+    `;
+  }};
 `;
 
 /** Tier's description */
-const TierBody = styled.div`
+const Description = styled.div`
   overflow-wrap: break-word;
   margin: 8px 0;
   font-size: 14px;
@@ -82,6 +86,10 @@ const I18nContributionType = defineMessages({
     id: 'ContributionType.EventPassed',
     defaultMessage: 'Past event',
   },
+  [ContributionTypes.TIER_PASSED]: {
+    id: 'ContributionType.TierPassed',
+    defaultMessage: 'Past tier',
+  },
   [ContributionTypes.PRODUCT]: {
     id: 'ContributionType.Product',
     defaultMessage: 'Product',
@@ -103,7 +111,7 @@ const I18nContributionType = defineMessages({
 const getContributeCTA = type => {
   switch (type) {
     case ContributionTypes.FINANCIAL_GOAL:
-      return <FormattedMessage id="ContributeCard.BtnGoal" defaultMessage="Contribute with this goal" />;
+      return <FormattedMessage id="ContributeCard.BtnGoal" defaultMessage="Contribute to this goal" />;
     case ContributionTypes.EVENT_PARTICIPATE:
       return <FormattedMessage id="ContributeCard.BtnEvent" defaultMessage="Get tickets" />;
     case ContributionTypes.EVENT_PASSED:
@@ -138,29 +146,33 @@ const ContributeCard = ({
   stats,
   hideContributors,
   image,
+  disableCTA,
+  ...props
 }) => {
   const totalContributors = (stats && stats.all) || (contributors && contributors.length) || 0;
 
   return (
-    <StyledContributeCard>
-      <CoverImage image={image}>
+    <StyledContributeCard {...props}>
+      <CoverImage image={image} isDisabled={disableCTA}>
         <StyledTag position="absolute" bottom="8px" left="8px" background="white" color="black.700" fontWeight="600">
           {intl.formatMessage(I18nContributionType[type])}
         </StyledTag>
       </CoverImage>
       <Flex px={3} py={3} flexDirection="column" justifyContent="space-between" flex="1">
         <Flex flexDirection="column" flex="1 1">
-          <P fontSize="H5" mt={1} mb={2} fontWeight="bold" textTransform="capitalize">
+          <P fontSize="H5" mt={1} mb={2} fontWeight="bold" textTransform="capitalize" data-cy="contribute-title">
             {title}
           </P>
-          <TierBody>{children}</TierBody>
+          <Description data-cy="contribute-description">{children}</Description>
         </Flex>
         <Box>
-          <Link route={route} params={routeParams}>
-            <StyledButton buttonStyle={getCTAButtonStyle(type)} width={1} mb={2} mt={3}>
-              {buttonText || getContributeCTA(type)}
-            </StyledButton>
-          </Link>
+          {!disableCTA && (
+            <Link route={route} params={routeParams}>
+              <StyledButton buttonStyle={getCTAButtonStyle(type)} width={1} mb={2} mt={3} data-cy="contribute-btn">
+                {buttonText || getContributeCTA(type)}
+              </StyledButton>
+            </Link>
+          )}
           {!hideContributors && (
             <Box mt={2} height={60}>
               {contributors && contributors.length > 0 && (
@@ -226,6 +238,8 @@ ContributeCard.propTypes = {
   routeParams: PropTypes.object,
   /** The card body */
   children: PropTypes.node,
+  /** If true, the call to action will not be displayed */
+  disableCTA: PropTypes.bool,
   /** Contributors */
   contributors: PropTypes.arrayOf(
     PropTypes.shape({

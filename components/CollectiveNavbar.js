@@ -196,6 +196,10 @@ const i18nSection = defineMessages({
     id: 'CollectivePage.NavBar.Transactions',
     defaultMessage: 'Transactions',
   },
+  [Sections.GOALS]: {
+    id: 'CollectivePage.NavBar.Goals',
+    defaultMessage: 'Goals',
+  },
 });
 
 /**
@@ -227,11 +231,17 @@ const getCollectiveTypeBlacklistedSections = collectiveType => {
  */
 export const getSectionsForCollective = (collective, isAdmin) => {
   const sections = get(collective, 'settings.collectivePage.sections', AllSectionsNames);
+  const showGoals = get(collective, 'settings.collectivePage.showGoals', false);
   const toRemove = new Set(getCollectiveTypeBlacklistedSections(collective.type));
 
   // Can't contribute anymore if the collective is archived or has no host
   if (collective.isArchived || !collective.host) {
     toRemove.add(Sections.CONTRIBUTE);
+  }
+
+  // Goals are opt-in
+  if (!showGoals) {
+    toRemove.add(Sections.GOALS);
   }
 
   // Some sections are hidden for non-admins (usually when there's no data)
@@ -249,6 +259,20 @@ export const getSectionsForCollective = (collective, isAdmin) => {
   }
 
   return sections.filter(section => !toRemove.has(section));
+};
+
+const getDefaultCallsToactions = (collective, isAdmin) => {
+  if (!collective) {
+    return {};
+  }
+
+  const isCollective = collective.type === CollectiveType.COLLECTIVE;
+  return {
+    hasContact: collective.canContact,
+    hasSubmitExpense: isCollective,
+    hasApply: collective.canApply,
+    hasManageSubscriptions: isAdmin && !isCollective,
+  };
 };
 
 /**
@@ -270,6 +294,7 @@ const CollectiveNavbar = ({
 }) => {
   const [isExpended, setExpended] = React.useState(false);
   sections = sections || getSectionsForCollective(collective, isAdmin);
+  callsToAction = { ...getDefaultCallsToactions(collective, isAdmin), ...callsToAction };
 
   return (
     <MainContainer>
@@ -326,7 +351,7 @@ const CollectiveNavbar = ({
                 as={LinkComponent}
                 collectivePath={collective.path || `/${collective.slug}`}
                 section={section}
-                label={intl.formatMessage(i18nSection[section])}
+                label={i18nSection[section] ? intl.formatMessage(i18nSection[section]) : section}
               />
             </MenuLinkContainer>
           ))}
@@ -372,6 +397,8 @@ CollectiveNavbar.propTypes = {
     type: PropTypes.string.isRequired,
     path: PropTypes.string,
     isArchived: PropTypes.bool,
+    canContact: PropTypes.bool,
+    canApply: PropTypes.bool,
     host: PropTypes.object,
   }).isRequired,
   /** Defines the calls to action displayed next to the NavBar items. Match PropTypes of `CollectiveCallsToAction` */
@@ -415,7 +442,7 @@ CollectiveNavbar.defaultProps = {
   // eslint-disable-next-line react/prop-types
   LinkComponent: function DefaultNavbarLink({ section, label, collectivePath, className }) {
     return (
-      <Link route={`${collectivePath}/v2#section-${section}`} className={className}>
+      <Link route={`${collectivePath}#section-${section}`} className={className}>
         {label}
       </Link>
     );

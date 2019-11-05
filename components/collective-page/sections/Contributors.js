@@ -56,12 +56,12 @@ export default class SectionContributors extends React.PureComponent {
     financialContributors: PropTypes.arrayOf(ExpectedContributorsPropTypes),
   };
 
-  static MIN_CONTRIBUTORS_TO_SHOW_FILTERS = 2;
-
   constructor(props) {
     super(props);
     this.state = { filter: ContributorsFilter.CONTRIBUTOR_FILTERS.ALL };
   }
+
+  static MIN_CONTRIBUTORS_TO_SHOW_FILTERS = 2;
 
   setFilter = filter => {
     this.setState({ filter });
@@ -108,7 +108,7 @@ export default class SectionContributors extends React.PureComponent {
     const hasFilters = !onlyShowCore && filters.length > 1;
 
     return (
-      <MainContainer pt={80} pb={[2, 3]}>
+      <MainContainer data-cy="Contributors" pt={80} pb={[2, 3]}>
         <ContainerSectionContent>
           {!onlyShowCore ? (
             <React.Fragment>
@@ -155,6 +155,7 @@ export default class SectionContributors extends React.PureComponent {
         )}
         <ContributorsGrid
           contributors={contributors}
+          currency={collective.currency}
           getPaddingLeft={({ width, rowWidth, nbRows }) => {
             if (width < Dimensions.MAX_SECTION_WIDTH) {
               // No need for padding on screens small enough so they don't have padding

@@ -55,6 +55,8 @@ class InlineEditField extends Component {
     mutation: PropTypes.object.isRequired,
     /** Can user edit the description */
     canEdit: PropTypes.bool,
+    /** Max field length */
+    maxLength: PropTypes.number,
     /** Called to format the value before submitting */
     formatBeforeSubmit: PropTypes.func,
     /** Set to false to disable edit icon even if user is allowed to edit */
@@ -66,10 +68,13 @@ class InlineEditField extends Component {
      * Highly recommended if field is nullable.
      */
     placeholder: PropTypes.node,
+    /** Editing the top value. */
+    topEdit: PropTypes.number,
   };
 
   static defaultProps = {
     showEditIcon: true,
+    topEdit: -5,
   };
 
   state = { isEditing: false, draft: '' };
@@ -107,16 +112,25 @@ class InlineEditField extends Component {
   }
   z;
   render() {
-    const { field, values, mutation, canEdit, formatBeforeSubmit, showEditIcon, placeholder, children } = this.props;
+    const {
+      field,
+      values,
+      mutation,
+      canEdit,
+      formatBeforeSubmit,
+      showEditIcon,
+      placeholder,
+      children,
+      topEdit,
+    } = this.props;
     const { isEditing, draft } = this.state;
     const value = get(values, field);
     const touched = draft !== value;
-
     if (!isEditing) {
       return (
         <Container position="relative">
           {canEdit && showEditIcon && (
-            <Container position="absolute" top={-5} right={-5} zIndex={2}>
+            <Container position="absolute" top={topEdit} right={-5} zIndex={2}>
               <EditIcon size={24} onClick={this.enableEditor} data-cy={`InlineEditField-Trigger-${field}`} />
             </Container>
           )}
@@ -132,6 +146,7 @@ class InlineEditField extends Component {
                 children({
                   isEditing: true,
                   value: draft,
+                  maxLength: this.props.maxLength,
                   setValue: this.setDraft,
                   enableEditor: this.enableEditor,
                   disableEditor: this.disableEditor,
@@ -150,6 +165,7 @@ class InlineEditField extends Component {
                   fontSize="inherit"
                   fontWeight="inherit"
                   lineHeight="inherit"
+                  maxLength={this.props.maxLength}
                   data-cy={`InlineEditField-Textarea-${field}`}
                 />
               )}
@@ -159,7 +175,7 @@ class InlineEditField extends Component {
                     {error.message.replace('GraphQL error: ', '')}
                   </MessageBox>
                 )}
-                <Flex flexWrap="wrap" justifyContent="space-evenly" mt={2}>
+                <Flex flexWrap="wrap" justifyContent="space-evenly" mt={3}>
                   <FormButton data-cy="InlineEditField-Btn-Cancel" disabled={loading} onClick={this.disableEditor}>
                     <FormattedMessage id="form.cancel" defaultMessage="cancel" />
                   </FormButton>
@@ -174,7 +190,7 @@ class InlineEditField extends Component {
                       updateField({ variables }).then(this.disableEditor);
                     }}
                   >
-                    <FormattedMessage id="save" defaultMessage="save" />
+                    <FormattedMessage id="save" defaultMessage="Save" />
                   </FormButton>
                 </Flex>
               </Box>

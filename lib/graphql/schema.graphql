@@ -1,5 +1,5 @@
 # source: http://localhost:3060/graphql
-# timestamp: Fri Sep 27 2019 13:39:01 GMT+0200 (GMT+02:00)
+# timestamp: Tue Oct 22 2019 22:27:00 GMT+0100 (West Africa Standard Time)
 
 """
 Application model
@@ -116,6 +116,11 @@ type Collective implements CollectiveInterface {
   Returns whether this host accepts applications for new collectives
   """
   canApply: Boolean
+
+  """
+  Returns whether this collectives can be contacted
+  """
+  canContact: Boolean
 
   """
   Returns whether this collective is incognito
@@ -375,6 +380,7 @@ interface CollectiveInterface {
   isHost: Boolean
   isIncognito: Boolean
   canApply: Boolean
+  canContact: Boolean
   isArchived: Boolean
   isApproved: Boolean
   isDeletable: Boolean
@@ -561,6 +567,10 @@ enum CollectiveOrderField {
 The results from searching for collectives with pagination info
 """
 type CollectiveSearchResults {
+  """
+  A unique identifier for this search (for caching)
+  """
+  id: String
   collectives: [Collective]
   limit: Int
   offset: Int
@@ -813,7 +823,7 @@ type Contributor {
   """
   Contributor avatar or logo
   """
-  image: String
+  image(height: Int, format: ImageFormat): String
 
   """
   A public message from contributors to describe their contributions
@@ -952,6 +962,11 @@ type Event implements CollectiveInterface {
   Returns whether this host accepts applications for new collectives
   """
   canApply: Boolean
+
+  """
+  Returns whether this collectives can be contacted
+  """
+  canContact: Boolean
 
   """
   Returns whether this collective is incognito
@@ -1147,10 +1162,10 @@ type Expense implements Transaction {
   updatedAt: DateString
   paymentMethod: PaymentMethodType
   description: String
-  privateMessage: String
-  category: String
+  privateMessage: String @deprecated(reason: "Please use transaction.expense.privateMessage")
+  category: String @deprecated(reason: "Please use transaction.expense.category")
   expense: ExpenseType
-  attachment: String
+  attachment: String @deprecated(reason: "Please use transaction.expense.attachment")
 }
 
 """
@@ -1448,8 +1463,14 @@ type Mutation {
   Approve a collective
   """
   approveCollective(id: Int!): CollectiveInterface
+
+  """
+  Reject a collective
+  """
+  rejectCollective(id: Int!, rejectionReason: String): CollectiveInterface
   archiveCollective(id: Int!): CollectiveInterface
   unarchiveCollective(id: Int!): CollectiveInterface
+  sendMessageToCollective(collectiveId: Int!, message: String!, subject: String): SendMessageToCollectiveResult
 
   """
   Create a user with an optional organization.
@@ -1474,6 +1495,16 @@ type Mutation {
     The website URL originating the request
     """
     websiteUrl: String
+
+    """
+    If set to false, will act like just like a Sign In and returns the user
+    """
+    throwIfExists: Boolean = true
+
+    """
+    If true, a signIn link will be sent to the user
+    """
+    sendSignInLink: Boolean = true
   ): CreateUserResult
 
   """
@@ -1497,6 +1528,7 @@ type Mutation {
   ): UserDetails
   editConnectedAccount(connectedAccount: ConnectedAccountInputType!): ConnectedAccountType
   approveExpense(id: Int!): ExpenseType
+  unapproveExpense(id: Int!): ExpenseType
   rejectExpense(id: Int!): ExpenseType
   payExpense(
     id: Int!
@@ -1505,9 +1537,11 @@ type Mutation {
     platformFeeInCollectiveCurrency: Int
   ): ExpenseType
   markOrderAsPaid(id: Int!): OrderType
+  markPendingOrderAsExpired(id: Int!): OrderType
   createExpense(expense: ExpenseInputType!): ExpenseType
   editExpense(expense: ExpenseInputType!): ExpenseType
   deleteExpense(id: Int!): ExpenseType
+  markExpenseAsUnpaid(id: Int!, processorFeeRefunded: Boolean!): ExpenseType
 
   """
   Update a single tier
@@ -1519,6 +1553,11 @@ type Mutation {
     tier: TierInputType!
   ): Tier
   editTiers(id: Int!, tiers: [TierInputType]): [Tier]
+
+  """
+  Updates all the core contributors (role = ADMIN or MEMBER) for this collective.
+  """
+  editCoreContributors(collectiveId: Int!, members: [MemberInputType!]!): CollectiveInterface
   createMember(
     member: CollectiveAttributesInputType!
     collective: CollectiveAttributesInputType!
@@ -1895,6 +1934,7 @@ enum OrderStatus {
   CANCELLED
   REJECTED
   ERROR
+  EXPIRED
 }
 
 """
@@ -2064,6 +2104,11 @@ type Organization implements CollectiveInterface {
   Returns whether this host accepts applications for new collectives
   """
   canApply: Boolean
+
+  """
+  Returns whether this collectives can be contacted
+  """
+  canContact: Boolean
 
   """
   Returns whether this collective is incognito
@@ -2337,7 +2382,15 @@ type PaymentMethodType {
 This is a root query
 """
 type Query {
-  Collective(slug: String, id: Int): CollectiveInterface
+  Collective(
+    slug: String
+    id: Int
+
+    """
+    If false, will return null instead of an error if collective is not found
+    """
+    throwIfMissing: Boolean = true
+  ): CollectiveInterface
   Tier(id: Int!): Tier
 
   """
@@ -2520,6 +2573,8 @@ type Query {
     orderDirection: OrderDirection = DESC
     limit: Int = 10
     offset: Int = 0
+    onlyOpenHosts: Boolean = true
+    minNbCollectivesHosted: Int! = 0
   ): CollectiveSearchResults
   allCollectiveTags: [String]
   member(id: Int, CollectiveId: Int, MemberCollectiveId: Int, TierId: Int): Member
@@ -2556,6 +2611,11 @@ type Query {
     isArchived: Boolean
   ): [CollectiveInterface]
   PaymentMethod(id: Int, code: String): PaymentMethodType
+
+  """
+  Search for collectives. Uses Algolia, except if searching for users or if using flag to opt-out.
+  Results are returned with best matches first.
+  """
   search(
     """
     Fetch collectives related to this term based on name, description, tags, slug, mission, and location
@@ -2563,10 +2623,26 @@ type Query {
     term: String
 
     """
+    [NON AVAILABLE WITH ALGOLIA] Limit the search to collectives under these hosts
+    """
+    hostCollectiveIds: [Int]
+
+    """
+    Only return collectives of this type
+    """
+    types: [TypeOfCollective]
+
+    """
     Limit the amount of results. Defaults to 20
     """
     limit: Int = 20
     offset: Int = 0
+
+    """
+    If set to false, an internal query will be used to search the collective rather than Algolia.
+    You **must** set this to false when searching for users/organizations.
+    """
+    useAlgolia: Boolean = true
   ): CollectiveSearchResults
   allTransactionsFromPaymentMethod(
     uuid: String!
@@ -2577,6 +2653,10 @@ type Query {
     dateTo: String
   ): [Transaction]
   Order(id: Int!): OrderType
+}
+
+type SendMessageToCollectiveResult {
+  success: Boolean
 }
 
 """
@@ -2831,7 +2911,6 @@ interface Transaction {
   collective: CollectiveInterface
   type: String
   description: String
-  privateMessage: String
   createdAt: DateString
   updatedAt: DateString
   refundTransaction: Transaction
@@ -3017,6 +3096,11 @@ type User implements CollectiveInterface {
   Returns whether this host accepts applications for new collectives
   """
   canApply: Boolean
+
+  """
+  Returns whether this collectives can be contacted
+  """
+  canContact: Boolean
 
   """
   Returns whether this collective is incognito

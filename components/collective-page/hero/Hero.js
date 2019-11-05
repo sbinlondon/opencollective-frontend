@@ -18,7 +18,7 @@ import { getCollectiveMainTag } from '../../../lib/collective.lib';
 import { twitterProfileUrl, githubProfileUrl } from '../../../lib/url_helpers';
 import StyledRoundButton from '../../StyledRoundButton';
 import StyledLink from '../../StyledLink';
-import ExternalLinkNewTab from '../../ExternalLinkNewTab';
+import ExternalLink from '../../ExternalLink';
 import { Span, H1 } from '../../Text';
 import Container from '../../Container';
 import I18nCollectiveTags from '../../I18nCollectiveTags';
@@ -71,18 +71,25 @@ const Hero = ({ collective, host, isAdmin, onPrimaryColorChange, callsToAction, 
   const isCollective = collective.type === CollectiveType.COLLECTIVE;
 
   return (
-    <Container position="relative" minHeight={325} zIndex={1000}>
+    <Container position="relative" minHeight={325} zIndex={1000} data-cy="collective-hero">
       <HeroBackground collective={collective} isEditing={isEditingCover} onEditCancel={() => editCover(false)} />
       {isAdmin && !isEditing && (
         // We don't have any mobile view for this one yet
-        <Container display={['none', null, null, 'block']} position="absolute" right={25} top={25} zIndex={222}>
-          <StyledButton onClick={() => editCover(true)}>
+        <Container
+          data-cy="edit-collective-display-features"
+          display={['none', null, null, 'block']}
+          position="absolute"
+          right={25}
+          top={25}
+          zIndex={222}
+        >
+          <StyledButton data-cy="edit-cover-btn" onClick={() => editCover(true)}>
             <Span mr={2}>
               <Camera size="1.2em" />
             </Span>
             <FormattedMessage id="Hero.EditCover" defaultMessage="Edit cover" />
           </StyledButton>
-          <StyledButton ml={3} onClick={() => showColorPicker(true)}>
+          <StyledButton data-cy="edit-main-color-btn" ml={3} onClick={() => showColorPicker(true)}>
             <Span mr={2}>
               <Palette size="1.2em" />
             </Span>
@@ -104,7 +111,7 @@ const Hero = ({ collective, host, isAdmin, onPrimaryColorChange, callsToAction, 
         <Container position="relative" mb={2} width={128}>
           <HeroAvatar collective={collective} isAdmin={isAdmin} />
         </Container>
-        <H1 color="black.800" fontSize="H3" lineHeight="H3" textAlign="left">
+        <H1 color="black.800" fontSize="H3" lineHeight="H3" textAlign="left" data-cy="collective-title">
           {collective.name || collective.slug}
         </H1>
 
@@ -122,25 +129,40 @@ const Hero = ({ collective, host, isAdmin, onPrimaryColorChange, callsToAction, 
           )}
           <Flex my={2}>
             {collective.twitterHandle && (
-              <ExternalLinkNewTab href={twitterProfileUrl(collective.twitterHandle)} title="Twitter">
+              <ExternalLink
+                data-cy="twitterProfileUrl"
+                href={twitterProfileUrl(collective.twitterHandle)}
+                title="Twitter"
+                openInNewTab
+              >
                 <StyledRoundButton size={32} mr={3}>
                   <Twitter size={12} />
                 </StyledRoundButton>
-              </ExternalLinkNewTab>
+              </ExternalLink>
             )}
             {collective.githubHandle && (
-              <ExternalLinkNewTab href={githubProfileUrl(collective.githubHandle)} title="Github">
+              <ExternalLink
+                data-cy="githubProfileUrl"
+                href={githubProfileUrl(collective.githubHandle)}
+                title="Github"
+                openInNewTab
+              >
                 <StyledRoundButton size={32} mr={3}>
                   <Github size={12} />
                 </StyledRoundButton>
-              </ExternalLinkNewTab>
+              </ExternalLink>
             )}
             {collective.website && (
-              <ExternalLinkNewTab href={collective.website} title={intl.formatMessage(Translations.website)}>
+              <ExternalLink
+                data-cy="collectiveWebsite"
+                href={collective.website}
+                title={intl.formatMessage(Translations.website)}
+                openInNewTab
+              >
                 <StyledRoundButton size={32} mr={3}>
                   <Globe size={14} />
                 </StyledRoundButton>
-              </ExternalLinkNewTab>
+              </ExternalLink>
             )}
           </Flex>
           {host && collective.isApproved && (
@@ -152,14 +174,16 @@ const Hero = ({ collective, host, isAdmin, onPrimaryColorChange, callsToAction, 
                   FiscalHost: <DefinedTerm term={Terms.FISCAL_HOST} />,
                   hostName: (
                     <LinkCollective collective={host}>
-                      <Span color="black.600">{host.name}</Span>
+                      <Span data-cy="fiscalHostName" color="black.600">
+                        {host.name}
+                      </Span>
                     </LinkCollective>
                   ),
                 }}
               />
             </Container>
           )}
-          {collective.isHost && (
+          {collective.canApply && (
             <React.Fragment>
               {collective.settings.tos && (
                 <StyledLink
@@ -217,6 +241,7 @@ Hero.propTypes = {
     slug: PropTypes.string.isRequired,
     company: PropTypes.string,
     isApproved: PropTypes.bool,
+    canApply: PropTypes.bool,
     backgroundImage: PropTypes.string,
     twitterHandle: PropTypes.string,
     githubHandle: PropTypes.string,

@@ -1,8 +1,6 @@
-import nextRoutes from 'next-routes';
+const routes = require('next-routes');
 
-const pages = nextRoutes();
-
-pages
+const pages = routes()
   .add('home', '/', 'index')
   .add('static', '/:pageSlug(widgets|tos|privacypolicy|support|hiring)', 'staticPage')
   .add('redeem', '/redeem/:code?')
@@ -28,6 +26,7 @@ pages
   .add('editEvent', '/:parentCollectiveSlug/events/:eventSlug/edit')
   .add('editCollective', '/:slug/edit/:section?')
   .add('events', '/:collectiveSlug/events')
+  .add('collective-contact', '/:parentCollectiveSlug?/:collectiveType(events)?/:collectiveSlug/contact')
   .add('subscriptions', '/:collectiveSlug/subscriptions')
   .add('tiers-iframe', '/:collectiveSlug/tiers/iframe')
   .add('host.expenses', '/:hostCollectiveSlug/collectives/expenses', 'host.dashboard')
@@ -127,7 +126,7 @@ pages.add(
 pages
   .add('createPledge', '/pledges/new')
   .add('createCollectivePledge', '/:slug/pledges/new', 'createPledge')
-  .add('completePledge', '/pledges/:id')
+  .add('completePledge', '/pledges/:orderId/:step(contributeAs|details|payment|summary)?')
   .add('claimCollective', '/:collectiveSlug/claim');
 
 // Application management
@@ -155,12 +154,7 @@ if (process.env.NCP_IS_DEFAULT === 'true') {
   pages.add('collective', '/:slug', 'new-collective-page');
   pages.add('legacy-collective-page', '/:slug/legacy', 'collective');
 } else {
-  // Hardcode some collectives for the V2 beta program
-  const collectivesBeta = process.env.NCP_BETA_COLLECTIVES || 'betree';
-  pages.add('new-collective-page-beta', `/:slug(${collectivesBeta})`, 'new-collective-page');
   pages.add('collective', '/:slug');
 }
 
-export default pages;
-
-export const { Link, Router } = pages;
+module.exports = pages;

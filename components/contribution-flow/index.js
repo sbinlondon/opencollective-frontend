@@ -15,7 +15,7 @@ import { AmountTypes } from '../../lib/constants/tiers-types';
 import { VAT_OPTIONS } from '../../lib/constants/vat';
 import { Router } from '../../server/pages';
 import { getStripe, stripeTokenToPaymentMethod } from '../../lib/stripe';
-import { compose, formatCurrency, getEnvVar, parseToBoolean } from '../../lib/utils';
+import { compose, formatCurrency, getEnvVar, parseToBoolean, reportValidityHTML5 } from '../../lib/utils';
 import { getPaypal } from '../../lib/paypal';
 import { getRecaptcha, getRecaptchaSiteKey, unloadRecaptcha } from '../../lib/recaptcha';
 import { addCreateCollectiveMutation } from '../../lib/graphql/mutations';
@@ -29,6 +29,7 @@ import Loading from '../Loading';
 import StyledButton from '../StyledButton';
 import PayWithPaypalButton from '../PayWithPaypalButton';
 import ContributeDetailsFAQ from '../faqs/ContributeDetailsFAQ';
+import ContributePaymentFAQ from '../faqs/ContributePaymentFAQ';
 import Container from '../Container';
 import { fadeIn } from '../StyledKeyframes';
 import MessageBox from '../MessageBox';
@@ -36,7 +37,6 @@ import SignInOrJoinFree from '../SignInOrJoinFree';
 import Steps from '../Steps';
 import EventDetails from '../EventDetails';
 
-import Cover from './Cover';
 import ContributionFlowStepsProgress from './ContributionFlowStepsProgress';
 import ContributionDetails from './ContributionDetails';
 import StepProfile from './StepProfile';
@@ -85,10 +85,17 @@ class CreateOrderPage extends React.Component {
       id: PropTypes.number.isRequired,
       type: PropTypes.string.isRequired,
       slug: PropTypes.string.isRequired,
+      name: PropTypes.string.isRequired,
       currency: PropTypes.string.isRequired,
       hostFeePercent: PropTypes.number.isRequired,
       location: PropTypes.shape({ country: PropTypes.string }),
-      parentCollective: PropTypes.shape(),
+      parentCollective: PropTypes.shape({
+        slug: PropTypes.string,
+        settings: PropTypes.object,
+        location: PropTypes.shape({
+          country: PropTypes.string,
+        }),
+      }),
     }).isRequired,
     host: PropTypes.shape({
       id: PropTypes.number.isRequired,
@@ -102,10 +109,17 @@ class CreateOrderPage extends React.Component {
       slug: PropTypes.string,
       type: PropTypes.string,
       amount: PropTypes.number,
+      name: PropTypes.string,
       minimumAmount: PropTypes.number,
       amountType: PropTypes.string,
       presets: PropTypes.arrayOf(PropTypes.number),
       customFields: PropTypes.arrayOf(PropTypes.object),
+    }),
+    /** If completing a pledge, this should contain an order object */
+    pledge: PropTypes.shape({
+      id: PropTypes.number,
+      interval: PropTypes.string,
+      totalAmount: PropTypes.number,
     }),
     verb: PropTypes.string.isRequired,
     step: PropTypes.string,
@@ -117,11 +131,13 @@ class CreateOrderPage extends React.Component {
     fixedAmount: PropTypes.number,
     customData: PropTypes.object,
     defaultQuantity: PropTypes.number,
+    onSuccess: PropTypes.func,
     LoggedInUser: PropTypes.object, // from withUser
     loadingLoggedInUser: PropTypes.bool, // from withUser
     refetchLoggedInUser: PropTypes.func.isRequired, // from withUser
     createOrder: PropTypes.func.isRequired, // from mutation
     confirmOrder: PropTypes.func.isRequired, // from mutation
+    completePledge: PropTypes.func.isRequired, // from mutation
     createCollective: PropTypes.func.isRequired, // from mutation
     loadStripe: PropTypes.func.isRequired, // from withStripe
     intl: PropTypes.object.isRequired, // from injectIntl
@@ -131,8 +147,6 @@ class CreateOrderPage extends React.Component {
     defaultQuantity: 1,
     verb: 'contribute',
   };
-
-  static errorRecaptchaConnect = "Can't connect to ReCaptcha. Try to reload the page, or disable your Ad Blocker.";
 
   constructor(props) {
     super(props);
@@ -191,6 +205,8 @@ class CreateOrderPage extends React.Component {
     }
   }
 
+  static errorRecaptchaConnect = "Can't connect to ReCaptcha. Try to reload the page, or disable your Ad Blocker.";
+
   loadInitialData() {
     this.setState(state => ({
       ...state,
@@ -209,7 +225,7 @@ class CreateOrderPage extends React.Component {
 
   /** Navigate to another step, ensuring all route params are preserved */
   pushStepRoute = async (stepName, routeParams = {}) => {
-    const { collective, tier } = this.props;
+    const { collective, tier, pledge } = this.props;
 
     const params = {
       verb: this.props.verb || 'donate',
@@ -233,6 +249,13 @@ class CreateOrderPage extends React.Component {
         route = 'orderCollectiveTierNew';
         params.verb = 'contribute'; // Enforce "contribute" verb for ordering tiers
       }
+    } else if (pledge && pledge.id && stepName !== 'success') {
+      route = 'completePledge';
+      params.orderId = pledge.id;
+      delete params.verb;
+    } else if (params.verb === 'contribute') {
+      // Never use `contribute` as verb if not using a tier (would introduce a route conflict)
+      params.verb = 'pay';
     }
 
     // Reset errors if any
@@ -310,7 +333,7 @@ class CreateOrderPage extends React.Component {
 
   /** Validate step profile, create new org if necessary */
   validateStepProfile = async () => {
-    if (!this.state.stepProfile || !this.activeFormRef.current || !this.activeFormRef.current.reportValidity()) {
+    if (!this.state.stepProfile || !reportValidityHTML5(this.activeFormRef.current)) {
       return false;
     }
 
@@ -357,10 +380,11 @@ class CreateOrderPage extends React.Component {
       }
     }
 
-    const tier = this.props.tier;
+    const { collective, tier, description, pledge, completePledge, createOrder } = this.props;
     const order = {
       paymentMethod,
       recaptchaToken,
+      id: pledge ? pledge.id : null,
       totalAmount: this.getTotalAmountWithTaxes(),
       taxAmount: get(stepSummary, 'amount', 0),
       countryISO: get(stepSummary, 'countryISO'),
@@ -369,15 +393,17 @@ class CreateOrderPage extends React.Component {
       currency: this.getCurrency(),
       interval: stepDetails.interval,
       fromCollective: pick(stepProfile, ['id', 'type', 'name']),
-      collective: pick(this.props.collective, ['id']),
+      collective: pick(collective, ['id']),
       tier: tier ? pick(tier, ['id', 'amount']) : undefined,
-      description: this.props.description || '',
+      description: description || '',
       customData,
     };
 
     try {
-      const res = await this.props.createOrder(order);
-      const orderCreated = res.data.createOrder;
+      const orderCreated = pledge
+        ? (await completePledge(order)).data.updateOrder
+        : (await createOrder(order)).data.createOrder;
+
       if (orderCreated.stripeError) {
         this.handleStripeError(orderCreated);
       } else {
@@ -407,6 +433,9 @@ class CreateOrderPage extends React.Component {
   handleSuccess = orderCreated => {
     this.setState({ submitting: false, submitted: true, error: null });
     this.props.refetchLoggedInUser();
+    if (this.props.onSuccess) {
+      this.props.onSuccess();
+    }
     if (this.props.redirect && this.isValidRedirect(this.props.redirect)) {
       const orderId = get(orderCreated, 'id', null);
       const transactionId = get(orderCreated, 'transactions[0].id', null);
@@ -497,7 +526,7 @@ class CreateOrderPage extends React.Component {
   }
 
   getDefaultAmount() {
-    const { tier } = this.props;
+    const { tier, pledge } = this.props;
     const stateAmount = get(this.state.stepDetails, 'totalAmount');
 
     if (!isNil(stateAmount)) {
@@ -506,6 +535,8 @@ class CreateOrderPage extends React.Component {
       return this.props.fixedAmount;
     } else if (tier && !isNil(tier.amount)) {
       return tier.amount;
+    } else if (pledge && pledge.totalAmount) {
+      return pledge.totalAmount;
     } else if (this.getOrderMinAmount() === 0) {
       // Free tiers are free per default, even when user can make a donation
       return 0;
@@ -518,16 +549,13 @@ class CreateOrderPage extends React.Component {
   /** Get default total amount, or undefined if we don't have any info on this */
   getDefaultStepDetails(tier) {
     const { stepDetails } = this.state;
+    const { fixedInterval, pledge } = this.props;
     const amount = this.getDefaultAmount();
     const quantity = get(stepDetails, 'quantity') || this.props.defaultQuantity || 1;
-    const interval = get(stepDetails, 'interval') || get(tier, 'interval') || this.props.fixedInterval;
+    const interval = get(stepDetails, 'interval') || get(tier, 'interval') || fixedInterval || get(pledge, 'interval');
+    const totalAmount = amount * quantity;
 
-    return {
-      amount,
-      quantity,
-      interval,
-      totalAmount: amount * quantity,
-    };
+    return { amount, quantity, interval, totalAmount };
   }
 
   /** Get total amount based on stepDetails with taxes from step summary applied */
@@ -594,7 +622,7 @@ class CreateOrderPage extends React.Component {
         name: 'details',
         isCompleted: Boolean(stepDetails && stepDetails.totalAmount >= minAmount),
         validate: () => {
-          return stepDetails && this.activeFormRef.current && this.activeFormRef.current.reportValidity();
+          return stepDetails && reportValidityHTML5(this.activeFormRef.current);
         },
       });
     }
@@ -627,7 +655,9 @@ class CreateOrderPage extends React.Component {
   /** Returns manual payment method if supported by the host and not using an interval, null otherwise */
   getManualPaymentMethod() {
     const pm = get(this.props.host.settings, 'paymentMethods.manual');
-    if (!pm || get(this.state, 'stepDetails.interval')) {
+    const interval = get(this.state, 'stepDetails.interval');
+
+    if (interval || (!pm && !this.props.LoggedInUser.isRoot())) {
       return null;
     }
 
@@ -723,10 +753,13 @@ class CreateOrderPage extends React.Component {
               amountOptions={this.props.fixedAmount ? null : this.getAmountsPresets()}
               currency={this.getCurrency()}
               onChange={this.updateDetails}
+              tierName={tier ? tier.name : ''}
+              collectiveSlug={collective.slug}
               interval={interval}
               amount={get(stepDetails, 'amount') || defaultStepDetails.amount}
               quantity={get(stepDetails, 'quantity') || defaultStepDetails.quantity}
-              disabledInterval={Boolean(tier) || Boolean(this.props.fixedInterval)}
+              changeIntervalWarning={Boolean(tier)}
+              disabledInterval={Boolean(this.props.fixedInterval)}
               disabledAmount={!get(tier, 'presets') && !isNil(get(tier, 'amount') || this.props.fixedAmount)}
               minAmount={this.getOrderMinAmount()}
               maxQuantity={get(tier, 'stats.availableQuantity') || get(tier, 'maxQuantity')}
@@ -794,16 +827,26 @@ class CreateOrderPage extends React.Component {
                 disabled={this.state.submitting || this.state.submitted}
               />
             </Flex>
-            {this.isFixedContribution() ? (
-              <ContributionDetails
-                totalAmount={get(stepDetails, 'totalAmount')}
-                interval={interval}
-                currency={this.getCurrency()}
-                tax={this.state.stepSummary}
-              />
-            ) : (
-              <Box width={[0, null, null, 1 / 5]} />
-            )}
+            <Container width={[0, null, null, 1 / 5]}>
+              {this.isFixedContribution() && (
+                <ContributionDetails
+                  totalAmount={get(stepDetails, 'totalAmount')}
+                  interval={interval}
+                  currency={this.getCurrency()}
+                  tax={this.state.stepSummary}
+                />
+              )}
+              {isIncognito && (
+                <ContributePaymentFAQ
+                  mt={4}
+                  display={['none', null, 'block']}
+                  width={1 / 5}
+                  minWidth="300px"
+                  maxWidth="370px"
+                  marginLeft="8px"
+                />
+              )}
+            </Container>
           </Flex>
         );
       }
@@ -906,71 +949,75 @@ class CreateOrderPage extends React.Component {
   }
 
   render() {
-    const { collective, tier, loadingLoggedInUser, LoggedInUser } = this.props;
+    const { loadingLoggedInUser, LoggedInUser } = this.props;
 
     return (
-      <div>
-        <Cover collective={collective} tier={tier} />
-        <Steps
-          steps={this.getSteps()}
-          currentStepName={this.props.step}
-          onStepChange={this.onStepChange}
-          onInvalidStep={this.onInvalidStep}
-          onComplete={this.submitOrder}
-        >
-          {({ steps, currentStep, lastVisitedStep, goNext, goBack, goToStep, isValidating, isValidStep }) => (
-            <Flex id="content" flexDirection="column" alignItems="center" mb={6} p={2}>
-              {(loadingLoggedInUser || LoggedInUser) && (
-                <Box mb={[3, null, 4]} width={0.8} css={{ maxWidth: 365, minHeight: 95 }}>
-                  <ContributionFlowStepsProgress
-                    steps={steps}
-                    currentStep={currentStep}
-                    lastVisitedStep={lastVisitedStep}
-                    goToStep={goToStep}
-                    stepProfile={this.state.stepProfile}
-                    stepDetails={this.state.stepDetails}
-                    stepPayment={this.state.stepPayment}
-                    submitted={this.state.submitted}
-                    loading={loadingLoggedInUser || this.state.loading || this.state.submitting}
-                    currency={this.getCurrency()}
-                    isFreeTier={this.getOrderMinAmount() === 0}
-                  />
-                </Box>
-              )}
-              {this.state.error && (
-                <MessageBox type="error" mb={3} mx={2} withIcon>
-                  {this.state.error.replace('GraphQL error: ', '')}
-                </MessageBox>
-              )}
-              {loadingLoggedInUser || !isValidStep ? (
-                <Loading />
-              ) : (
-                this.renderContent(currentStep, goNext, goBack, isValidating)
-              )}
-            </Flex>
-          )}
-        </Steps>
-      </div>
+      <Steps
+        steps={this.getSteps()}
+        currentStepName={this.props.step}
+        onStepChange={this.onStepChange}
+        onInvalidStep={this.onInvalidStep}
+        onComplete={this.submitOrder}
+      >
+        {({ steps, currentStep, lastVisitedStep, goNext, goBack, goToStep, isValidating, isValidStep }) => (
+          <Flex data-cy="cf-content" flexDirection="column" alignItems="center" pt={2} pb={[4, 5]} px={2}>
+            {(loadingLoggedInUser || LoggedInUser) && (
+              <Box mb={[3, null, 4]} width={0.8} css={{ maxWidth: 365, minHeight: 95 }}>
+                <ContributionFlowStepsProgress
+                  steps={steps}
+                  currentStep={currentStep}
+                  lastVisitedStep={lastVisitedStep}
+                  goToStep={goToStep}
+                  stepProfile={this.state.stepProfile}
+                  stepDetails={this.state.stepDetails}
+                  stepPayment={this.state.stepPayment}
+                  submitted={this.state.submitted}
+                  loading={loadingLoggedInUser || this.state.loading || this.state.submitting}
+                  currency={this.getCurrency()}
+                  isFreeTier={this.getOrderMinAmount() === 0}
+                />
+              </Box>
+            )}
+            {this.state.error && (
+              <MessageBox type="error" mb={3} mx={2} withIcon>
+                {this.state.error.replace('GraphQL error: ', '')}
+              </MessageBox>
+            )}
+            {loadingLoggedInUser || !isValidStep ? (
+              <Loading />
+            ) : (
+              this.renderContent(currentStep, goNext, goBack, isValidating)
+            )}
+          </Flex>
+        )}
+      </Steps>
     );
   }
 }
+
+const SubmitOrderFragment = gql`
+  fragment SubmitOrderFragment on OrderType {
+    id
+    status
+    stripeError {
+      message
+      account
+      response
+    }
+    transactions {
+      id
+    }
+  }
+`;
 
 export const addCreateOrderMutation = graphql(
   gql`
     mutation createOrder($order: OrderInputType!) {
       createOrder(order: $order) {
-        id
-        status
-        stripeError {
-          message
-          account
-          response
-        }
-        transactions {
-          id
-        }
+        ...SubmitOrderFragment
       }
     }
+    ${SubmitOrderFragment}
   `,
   {
     props: ({ mutate }) => ({
@@ -983,18 +1030,10 @@ export const addConfirmOrderMutation = graphql(
   gql`
     mutation confirmOrder($order: ConfirmOrderInputType!) {
       confirmOrder(order: $order) {
-        id
-        status
-        stripeError {
-          message
-          account
-          response
-        }
-        transactions {
-          id
-        }
+        ...SubmitOrderFragment
       }
     }
+    ${SubmitOrderFragment}
   `,
   {
     props: ({ mutate }) => ({
@@ -1003,10 +1042,27 @@ export const addConfirmOrderMutation = graphql(
   },
 );
 
+const addCompletePledgeMutation = graphql(
+  gql`
+    mutation completePledge($order: OrderInputType!) {
+      updateOrder(order: $order) {
+        ...SubmitOrderFragment
+      }
+    }
+    ${SubmitOrderFragment}
+  `,
+  {
+    props: ({ mutate }) => ({
+      completePledge: order => mutate({ variables: { order } }),
+    }),
+  },
+);
+
 const addGraphQL = compose(
   addCreateCollectiveMutation,
   addCreateOrderMutation,
   addConfirmOrderMutation,
+  addCompletePledgeMutation,
 );
 
 export default injectIntl(addGraphQL(withUser(withStripeLoader(CreateOrderPage))));

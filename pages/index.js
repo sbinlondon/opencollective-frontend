@@ -250,6 +250,7 @@ class HomePage extends React.Component {
         <Header
           description="The Internet generation needs organizations that reflect who we are; where anybody can contribute to a shared mission; where leaders can easily change; and where money flows in full transparency. Create an Open Collective for your community."
           LoggedInUser={LoggedInUser}
+          menuItems={{ pricing: true, howItWorks: true }}
         />
         <Body>
           <Container
@@ -765,7 +766,7 @@ class HomePage extends React.Component {
                     </P>
                     <P>
                       <a href="https://opencollective.com/discover">
-                        <FormattedMessage id="home.collectives" defaultMessage="collectives" />
+                        <FormattedMessage id="home.collectives" defaultMessage="active collectives" />
                       </a>
                     </P>
                   </Container>

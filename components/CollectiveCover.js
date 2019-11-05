@@ -3,9 +3,12 @@ import PropTypes from 'prop-types';
 import classNames from 'classnames';
 import styled from 'styled-components';
 import { defineMessages, FormattedMessage, FormattedDate, FormattedTime, injectIntl } from 'react-intl';
+import dynamic from 'next/dynamic';
 import { Github } from 'styled-icons/fa-brands/Github';
 import { Twitter } from 'styled-icons/fa-brands/Twitter';
 import { ExternalLinkAlt } from 'styled-icons/fa-solid/ExternalLinkAlt';
+import momentTimezone from 'moment-timezone';
+import moment from 'moment';
 import { get } from 'lodash';
 import { withUser } from './UserProvider';
 import { prettyUrl, imagePreview } from '../lib/utils';
@@ -14,13 +17,15 @@ import Avatar from './Avatar';
 import Logo from './Logo';
 import { defaultBackgroundImage, CollectiveType } from '../lib/constants/collectives';
 import Link from './Link';
-import GoalsCover from './GoalsCover';
-import MenuBar from './MenuBar';
-import TopBackersCoverWithData from './TopBackersCoverWithData';
 import UserCompany from './UserCompany';
 import CollectiveNavbar from './CollectiveNavbar';
 import Container from './Container';
 import { AllSectionsNames } from './collective-page/_constants';
+
+// Dynamicly load HTMLEditor to download it only if user can edit the page
+const GoalsCover = dynamic(() => import('./GoalsCover'));
+const MenuBar = dynamic(() => import('./MenuBar'));
+const TopBackersCoverWithData = dynamic(() => import('./TopBackersCoverWithData'));
 
 const ContributeLink = styled(Link)`
   --webkit-appearance: none;
@@ -91,7 +96,6 @@ class CollectiveCover extends React.Component {
     LoggedInUser: PropTypes.object,
     intl: PropTypes.object.isRequired,
     cta: PropTypes.object, // { href, label }
-    context: PropTypes.string,
     displayContributeLink: PropTypes.bool,
     selectedSection: PropTypes.oneOf(AllSectionsNames),
     /** If true, the component will never render the new collective navbar */
@@ -100,6 +104,7 @@ class CollectiveCover extends React.Component {
 
   constructor(props) {
     super(props);
+
     this.messages = defineMessages({
       contribute: { id: 'collective.contribute', defaultMessage: 'contribute' },
       apply: {
@@ -111,6 +116,7 @@ class CollectiveCover extends React.Component {
     });
 
     this.description = props.description || props.collective.description;
+
     if (props.collective.type === 'EVENT') {
       const eventLocationRoute = props.href ? `${props.href}#location` : '#location';
       this.description = (
@@ -147,10 +153,60 @@ class CollectiveCover extends React.Component {
                 />
                 , &nbsp;
                 <FormattedTime value={props.collective.endsAt} timeZone={props.collective.timezone} />
-                &nbsp; - &nbsp;
+                &nbsp;{' '}
+                {moment()
+                  .tz(props.collective.timezone)
+                  .zoneAbbr()}{' '}
+                (<FormattedMessage id="EventCover.EventTime" defaultMessage="Event Time" />)
               </React.Fragment>
             )}
-            {get(props.collective, 'location.name')}
+            <br />
+            {this.checkTimeDiff() && (
+              <em>
+                {props.collective.startsAt && (
+                  <React.Fragment>
+                    <FormattedDate
+                      value={props.collective.startsAt}
+                      timeZone={momentTimezone.tz.guess()}
+                      weekday="short"
+                      day="numeric"
+                      month="long"
+                    />
+                    , &nbsp;
+                    <FormattedTime value={props.collective.startsAt} timeZone={momentTimezone.tz.guess()} />
+                    &nbsp; - &nbsp;
+                  </React.Fragment>
+                )}
+
+                {props.collective.endsAt && (
+                  <React.Fragment>
+                    <FormattedDate
+                      value={props.collective.endsAt}
+                      timeZone={momentTimezone.tz.guess()}
+                      weekday="short"
+                      day="numeric"
+                      month="long"
+                      year="numeric"
+                    />
+                    , &nbsp;
+                    <FormattedTime value={props.collective.endsAt} timeZone={momentTimezone.tz.guess()} />
+                    &nbsp;{' '}
+                    {moment()
+                      .tz(momentTimezone.tz.guess())
+                      .zoneAbbr()}{' '}
+                    (<FormattedMessage id="EventCover.LocalTime" defaultMessage="Your Time" />)
+                  </React.Fragment>
+                )}
+                <br />
+              </em>
+            )}
+            {get(props.collective, 'location.name') && (
+              <FormattedMessage
+                id="EventCover.Location"
+                defaultMessage="Location: {location}"
+                values={{ location: get(props.collective, 'location.name') }}
+              />
+            )}
           </Link>
         </div>
       );
@@ -172,16 +228,20 @@ ${description}`;
     return tooltip;
   }
 
-  getDefaultCallsToAction() {
-    if (!this.props.collective) {
-      return {};
-    } else {
-      return { hasContact: this.props.collective.type === CollectiveType.COLLECTIVE };
+  checkTimeDiff() {
+    if (this.props.collective.timezone) {
+      const eventTimezone = moment()
+        .tz(this.props.collective.timezone)
+        .format('Z');
+      const browserTimezone = moment()
+        .tz(momentTimezone.tz.guess())
+        .format('Z');
+      return eventTimezone !== browserTimezone;
     }
   }
 
   render() {
-    const { collective, context, className, LoggedInUser, intl, forceLegacy } = this.props;
+    const { collective, className, LoggedInUser, intl, forceLegacy } = this.props;
     const { company, type, website, twitterHandle, githubHandle, stats } = collective;
     const canEdit = LoggedInUser && LoggedInUser.canEditCollective(collective);
     const ncpIsDefault = process.env.NCP_IS_DEFAULT === 'true';
@@ -196,7 +256,7 @@ ${description}`;
             collective={collective}
             isAdmin={canEdit}
             showEdit
-            callsToAction={this.props.callsToAction || this.getDefaultCallsToAction()}
+            callsToAction={this.props.callsToAction}
             selected={this.props.selectedSection}
           />
         </Container>
@@ -520,7 +580,17 @@ ${description}`;
                 {collective.type === 'EVENT' && (
                   <div className="contact">
                     <div className="parentCollective">
-                      <Link route={`/${collective.parentCollective.slug}`}>{collective.parentCollective.name}</Link>
+                      <FormattedMessage
+                        id="Event.CreatedBy"
+                        defaultMessage="Created by: {CollectiveLink}"
+                        values={{
+                          CollectiveLink: (
+                            <Link route={`/${collective.parentCollective.slug}`}>
+                              {collective.parentCollective.name}
+                            </Link>
+                          ),
+                        }}
+                      />
                     </div>
                   </div>
                 )}
@@ -557,7 +627,7 @@ ${description}`;
               </div>
             )}
 
-          {collective.type === 'COLLECTIVE' && context !== 'createUpdate' && collective.isActive && collective.host && (
+          {collective.type === 'COLLECTIVE' && collective.isActive && collective.host && (
             <div className={`statsContainer ${showGoalsCover ? 'goals' : ''}`}>
               {className !== 'small' && collective.type === 'COLLECTIVE' && (
                 <div className="topContributors">

@@ -56,6 +56,7 @@ class SectionTransactions extends React.Component {
     /** @ignore from withData */
     data: PropTypes.shape({
       loading: PropTypes.bool,
+      refetch: PropTypes.func,
       /** Expenses paid + refunds */
       contributions: PropTypes.arrayOf(
         PropTypes.shape({
@@ -110,6 +111,14 @@ class SectionTransactions extends React.Component {
 
   state = { filter: FILTERS.ALL };
 
+  componentDidUpdate(oldProps) {
+    // If user just logged in, refetch the data so we can get the transactions `uuid` that
+    // will make it possible for him to download the expenses.
+    if (!oldProps.idAdmin && this.props.isAdmin) {
+      this.props.data.refetch();
+    }
+  }
+
   getBudgetItems = memoizeOne((contributions, expenses, filter) => {
     if (filter === FILTERS.EXPENSES) {
       return expenses;
@@ -150,7 +159,7 @@ class SectionTransactions extends React.Component {
     return (
       <Box pt={5}>
         <ContainerSectionContent>
-          <SectionTitle mb={4} textAlign="left">
+          <SectionTitle data-cy="section-transactions-title" mb={4} textAlign="left">
             <FormattedMessage id="SectionTransactions.Title" defaultMessage="Transactions" />
           </SectionTitle>
         </ContainerSectionContent>

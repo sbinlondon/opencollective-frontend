@@ -18,6 +18,8 @@ class Header extends React.Component {
     className: PropTypes.string,
     title: PropTypes.string,
     showSearch: PropTypes.bool,
+    menuItems: PropTypes.object,
+    metas: PropTypes.object,
   };
 
   getTitle() {
@@ -64,6 +66,7 @@ class Header extends React.Component {
       'twitter:description': truncate(description, 256),
       'twitter:image': image || defaultImage,
       'og:title': metaTitle,
+      ...this.props.metas,
     };
 
     return Object.keys(metas).map(key => ({ key, value: metas[key] }));
@@ -74,7 +77,7 @@ class Header extends React.Component {
     return (
       <header>
         <Head>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
           <meta property="og:logo" content="/static/images/opencollectiveicon240x240" size="240x240" />
           <meta property="og:logo" content="/static/images/opencollectiveicon48x48" size="48x48" />
           <meta property="og:logo" content="/static/images/opencollectivelogo480x80" size="480x80" />
@@ -87,7 +90,7 @@ class Header extends React.Component {
           {canonicalURL && <link rel="canonical" href={canonicalURL} />}
         </Head>
         <div id="top" />
-        <TopBar className={className} showSearch={this.props.showSearch} />
+        <TopBar className={className} showSearch={this.props.showSearch} menuItems={this.props.menuItems} />
       </header>
     );
   }

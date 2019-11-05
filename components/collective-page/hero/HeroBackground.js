@@ -126,7 +126,11 @@ const HeroBackground = ({ collective, isEditing, onEditCancel }) => {
   ) : (
     <Mutation mutation={EditCollectiveBackgroundMutation}>
       {editBackground => (
-        <StyledBackground backgroundImage={collective.backgroundImage} isEditing>
+        <StyledBackground
+          data-cy="collective-background-image-styledBackground"
+          backgroundImage={collective.backgroundImage}
+          isEditing
+        >
           <Cropper
             image={uploadedImage ? uploadedImage.preview : collective.backgroundImage}
             cropSize={{ width: BASE_WIDTH, height: BASE_HEIGHT }}
@@ -145,32 +149,43 @@ const HeroBackground = ({ collective, isEditing, onEditCancel }) => {
           />
           <Container display={['none', 'flex']} position="absolute" right={25} top={25} zIndex={222}>
             <Dropzone
-              onDrop={acceptedFiles => setUploadedImage(acceptedFiles[0])}
+              onDrop={acceptedFiles =>
+                setUploadedImage(
+                  ...acceptedFiles.map(file =>
+                    Object.assign(file, {
+                      preview: URL.createObjectURL(file),
+                    }),
+                  ),
+                )
+              }
               multiple={false}
               accept="image/jpeg, image/png"
               style={{}}
               disabled={submitting}
             >
-              {({ isDragActive, isDragAccept }) => (
-                <StyledButton minWidth={150} disabled={submitting}>
-                  {!isDragActive && (
-                    <React.Fragment>
-                      <Span mr={2}>
-                        <Upload size="1em" />
-                      </Span>
-                      <FormattedMessage id="Upload" defaultMessage="Upload" />
-                    </React.Fragment>
-                  )}
-                  {isDragActive &&
-                    (isDragAccept ? (
-                      <FormattedMessage id="uploadImage.isDragActive" defaultMessage="Drop it like it's hot 🔥" />
-                    ) : (
-                      <FormattedMessage
-                        id="uploadImage.isDragReject"
-                        defaultMessage="🚫 This file type is not accepted"
-                      />
-                    ))}
-                </StyledButton>
+              {({ isDragActive, isDragAccept, getRootProps, getInputProps }) => (
+                <div {...getRootProps()}>
+                  <input data-cy="heroBackgroundDropzone" {...getInputProps()} />
+                  <StyledButton minWidth={150} disabled={submitting}>
+                    {!isDragActive && (
+                      <React.Fragment>
+                        <Span mr={2}>
+                          <Upload size="1em" />
+                        </Span>
+                        <FormattedMessage id="Upload" defaultMessage="Upload" />
+                      </React.Fragment>
+                    )}
+                    {isDragActive &&
+                      (isDragAccept ? (
+                        <FormattedMessage id="uploadImage.isDragActive" defaultMessage="Drop it like it's hot 🔥" />
+                      ) : (
+                        <FormattedMessage
+                          id="uploadImage.isDragReject"
+                          defaultMessage="🚫 This file type is not accepted"
+                        />
+                      ))}
+                  </StyledButton>
+                </div>
               )}
             </Dropzone>
             {((collective.backgroundImage && uploadedImage !== KEY_IMG_REMOVE) || uploadedImage !== KEY_IMG_REMOVE) && (
@@ -199,6 +214,7 @@ const HeroBackground = ({ collective, isEditing, onEditCancel }) => {
               <FormattedMessage id="form.cancel" defaultMessage="cancel" />
             </StyledButton>
             <StyledButton
+              data-cy="heroBackgroundDropzoneSave"
               textTransform="capitalize"
               buttonStyle="primary"
               ml={3}
@@ -239,7 +255,7 @@ const HeroBackground = ({ collective, isEditing, onEditCancel }) => {
                 }
               }}
             >
-              <FormattedMessage id="save" defaultMessage="save" />
+              <FormattedMessage id="save" defaultMessage="Save" />
             </StyledButton>
           </Container>
           <Container zIndex={222} position="absolute" right={25} top={75}>
